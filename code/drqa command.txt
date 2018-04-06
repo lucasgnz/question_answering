@@ -1,0 +1,3 @@
+export CLASSPATH=$CLASSPATH:data/corenlp/*
+
+python3 scripts/pipeline/interactive.py --doc-db ../../data/sec/sql/33-10231.db --retriever-model ../../data/sec/sql/tfidf/33-10231-tfidf-ngram\=2-hash\=16777216-tokenizer\=simple.npz
