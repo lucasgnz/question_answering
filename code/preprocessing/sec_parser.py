@@ -137,10 +137,10 @@ def reecrire_styles(html):
 
 def traiter_doc(docid):
     print("Traitement de "+docid)
-    if os.path.exists('../data/sec/sql/'+docid+'.db'):
+    if os.path.exists('../data/sql/'+docid+'.db'):
         print("---Doc déjà traité")
         return
-    html = open("../data/sec/html/" + docid + ".html", "r").read()
+    html = open("../../data/html/" + docid + ".html", "r").read()
     print("Réécriture des styles dans les balises...")
     html = reecrire_styles(html)
 
@@ -149,7 +149,7 @@ def traiter_doc(docid):
     H1 = chercher_balise(html, "h1", cond_attr={}, sous_balises=["a"])
     H1 += chercher_balise(html, "b", cond_attr={}, sous_balises=[])
     H1 = sorted(H1, key=lambda x: x[0])
-    db = sqlite3.connect('../data/sec/sql/'+docid+'.db')
+    db = sqlite3.connect('../../data/sql/'+docid+'.db')
     db.text_factory = str
     cursor = db.cursor()
     #cursor.execute('''DROP TABLE documents''')
@@ -217,7 +217,7 @@ def traiter_doc(docid):
     db.close()
 
 
-for element in os.listdir('../data/sec/html/'):
+for element in os.listdir('../../data/html/'):
     if element.endswith('.html') and element[0] != ".":
         traiter_doc(element.replace(".html",""))
 
