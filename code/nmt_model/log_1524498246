@@ -1,0 +1,14 @@
+# log_file=models/nmt_model/log_1524498246
+# Start step 0, lr 1, Mon Apr 23 15:44:11 2018
+  step 100 lr 1 step-time 0.32s wps 17.36K ppl 1690.76 gN 14.10 bleu 0.00, Mon Apr 23 15:44:43 2018
+  step 200 lr 1 step-time 0.16s wps 35.70K ppl 531.12 gN 6.28 bleu 0.00, Mon Apr 23 15:44:59 2018
+  step 300 lr 1 step-time 0.16s wps 35.80K ppl 354.62 gN 5.21 bleu 0.00, Mon Apr 23 15:45:15 2018
+  step 400 lr 1 step-time 0.16s wps 35.72K ppl 259.26 gN 4.19 bleu 0.00, Mon Apr 23 15:45:30 2018
+  step 500 lr 1 step-time 0.16s wps 36.28K ppl 223.65 gN 4.22 bleu 0.00, Mon Apr 23 15:45:46 2018
+  step 600 lr 1 step-time 0.16s wps 36.14K ppl 195.70 gN 3.57 bleu 0.00, Mon Apr 23 15:46:02 2018
+  step 700 lr 1 step-time 0.16s wps 35.84K ppl 182.80 gN 3.86 bleu 0.00, Mon Apr 23 15:46:17 2018
+  step 800 lr 1 step-time 0.16s wps 36.11K ppl 165.87 gN 3.22 bleu 0.00, Mon Apr 23 15:46:33 2018
+  step 900 lr 1 step-time 0.15s wps 36.13K ppl 154.71 gN 3.07 bleu 0.00, Mon Apr 23 15:46:48 2018
+  step 1000 lr 1 step-time 0.15s wps 35.94K ppl 144.19 gN 3.02 bleu 0.00, Mon Apr 23 15:47:04 2018
+  step 1100 lr 1 step-time 0.30s wps 18.29K ppl 141.08 gN 3.26 bleu 0.92, Mon Apr 23 15:47:56 2018
+  step 1200 lr 1 step-time 0.17s wps 33.75K ppl 134.64 gN 2.99 bleu 0.92, Mon Apr 23 15:48:13 2018
