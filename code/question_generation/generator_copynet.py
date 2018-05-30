@@ -7,6 +7,7 @@ from tensorflow.contrib.rnn import LSTMCell, LSTMStateTuple
 from tensorflow.contrib.seq2seq import BahdanauAttention, AttentionWrapper
 from copynet import *
 import time
+from lazy_adam_optimizer import LazyAdamOptimizer
 
 from parameters import *
 
@@ -19,6 +20,7 @@ class Generator:
 
 		hidden_units = config['HIDDEN_UNITS']
 		attention_units = config['ATTENTION_UNITS']
+		vocab_size = config['VOCAB_SIZE']
 		gen_vocab_size = config['GEN_VOCAB_SIZE']
 		embed_size = config['EMBED_SIZE']
 
@@ -28,8 +30,6 @@ class Generator:
 		self.targets = tf.placeholder(shape=(None, None), dtype=tf.int32, name='targets')
 		self.targets_lengths = tf.placeholder(shape=(None,), dtype=tf.int32, name='targets_lengths')
 
-		embeddings = tf.placeholder(shape=(None, embed_size), dtype=tf.float32, name='embeddings')
-
 		paragraphs = self.paragraphs
 		ans_locs = self.ans_locs
 		encoder_inputs_lengths = self.encoder_inputs_lengths
@@ -38,13 +38,20 @@ class Generator:
 
 		input_ids = tf.cast(paragraphs, tf.int32)
 
-		vocab_size, _ = tf.unstack(tf.shape(embeddings))
+
 		batch_size, max_time = tf.unstack(tf.shape(paragraphs))
 
-		#embeddings = tf.Variable(tf.random_uniform([vocab_size, embed_size], -0.01, 0.01), dtype=tf.float32)
+		# Load pretrained embeddings if any
+		if pretrainedEmbeddings != []:
+			embeddings = tf.Variable(pretrainedEmbeddings, dtype=tf.float32)
+		else:
+			embeddings = tf.Variable(tf.random_uniform([vocab_size, embed_size], -0.01, 0.01), dtype=tf.float32)
 
 		paragraphs_embedded = tf.nn.embedding_lookup(embeddings, tf.transpose(tf.cast(paragraphs, tf.int32), [1,0]))
-		targets_embedded = tf.nn.embedding_lookup(embeddings, tf.transpose(targets, [1,0]))
+
+		start_tokens = tf.ones([batch_size], dtype=tf.int32)
+		decoder_inputs = tf.concat([tf.expand_dims(start_tokens, 1), targets], 1)
+		decoder_inputs_embedded = tf.nn.embedding_lookup(embeddings, tf.transpose(decoder_inputs, [1,0]))
 
 		encoder_inputs = tf.concat([paragraphs_embedded, tf.expand_dims(tf.cast(tf.transpose(ans_locs, [1,0]), tf.float32), axis=2)],axis=2)
 
@@ -82,7 +89,7 @@ class Generator:
 
 		decoder_initial_state = copynet_cell.zero_state(batch_size, tf.float32).clone(cell_state=attention_cell.zero_state(batch_size=batch_size, dtype=tf.float32))
 
-		helper = tf.contrib.seq2seq.TrainingHelper(targets_embedded, targets_lengths, time_major=True)
+		helper = tf.contrib.seq2seq.TrainingHelper(decoder_inputs_embedded, targets_lengths, time_major=True)
 		#helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embeddings, tf.ones([batch_size], dtype=tf.int32), 0)
 
 		decoder = tf.contrib.seq2seq.BasicDecoder(copynet_cell, helper, decoder_initial_state, output_layer=None)
@@ -90,7 +97,6 @@ class Generator:
 		decoder_logits, decoder_ids = decoder_outputs
 
 		#LOSS
-		decoder_batch_size, decoder_max_steps, _ = tf.unstack(tf.shape(decoder_logits))
 		decoder_targets = tf.transpose(targets, [1,0])
 		labels = tf.one_hot(decoder_targets, depth=vocab_size, dtype=tf.float32)
 
@@ -101,14 +107,20 @@ class Generator:
 			logits=decoder_logits_
 		)
 
-		self.loss = tf.reduce_sum(stepwise_cross_entropy, axis=0)
+		"""eos = tf.constant(config['EOS'], dtype=tf.int32)
+		where_eos_targ = tf.cast(tf.equal(tf.cast(decoder_targets, dtype=tf.int32), eos), tf.float32)
+		n_tokens = tf.cast(tf.argmax(where_eos_targ, axis=0), tf.float32)"""
+
+		targets_max_len, _ = tf.unstack(tf.shape(decoder_targets))
+
+		self.loss = tf.reduce_sum(stepwise_cross_entropy, axis=0) / tf.cast(targets_max_len, tf.float32)
 		self.loss = tf.reduce_sum(self.loss) / tf.cast(batch_size, tf.float32)
+		#self.loss	= tf.Print(self.loss,[tf.nn.softmax(decoder_logits),labels], summarize=100)
 
-
-		optimizer = tf.train.AdamOptimizer(self.learning_rate)
+		optimizer = tf.train.AdagradOptimizer(self.learning_rate)#tf.train.GradientDescent
 		gradients, variables = zip(*optimizer.compute_gradients(self.loss))
 		gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
-		self.train_op = optimizer.apply_gradients(zip(gradients, variables))#.minimize(self.loss) #
+		self.train_op = optimizer.apply_gradients(zip(gradients, variables))#.minimize(self.loss)
 
 
 		self.saver = tf.train.Saver(max_to_keep=None)
@@ -119,15 +131,26 @@ class Generator:
 		self.sess.run(tf.global_variables_initializer())
 
 
-	def train_step_supervised(self, batch, lr, embeddings_):
-			l = self.sess.run([self.loss], feed_dict={
+	def train_step_supervised(self, batch, lr):
+			_, l = self.sess.run([self.train_op, self.loss], feed_dict={
   			self.paragraphs:batch[0],
 				self.ans_locs:batch[1],
 				self.encoder_inputs_lengths:batch[2],
 				self.targets: batch[3],
 				self.targets_lengths:batch[4],
-				embeddings:embeddings_})
+				self.learning_rate:lr
+			})
 			return l
+
+	def compute_loss(self, batch):
+		l = self.sess.run([self.loss], feed_dict={
+			self.paragraphs: batch[0],
+			self.ans_locs: batch[1],
+			self.encoder_inputs_lengths: batch[2],
+			self.targets: batch[3],
+			self.targets_lengths: batch[4]
+		})
+		return l[0]
 
 
 	def save_model(self, e):

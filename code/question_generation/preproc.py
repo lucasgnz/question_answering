@@ -1,9 +1,7 @@
 import unicodecsv as csv
 import numpy as np
 
-def read_data(path, index2word):
-  # word2index
-  word2index = dict([(w, i) for i, w in enumerate(index2word)])
+def read_data(path):
   contexts = []
   ans_locs = []
   questions = []
@@ -18,7 +16,7 @@ def read_data(path, index2word):
       ans_loc[int(row[2]):int(row[3])] = 1
       ans_locs.append(ans_loc)
 
-  return contexts, ans_locs, questions, word2index
+  return list(contexts), list(ans_locs), list(questions)
 
 
 def embedding_matrix(i2w, word2vec, embed_size, n_special_tokens):
@@ -26,7 +24,8 @@ def embedding_matrix(i2w, word2vec, embed_size, n_special_tokens):
   E = np.zeros((vocab_size,embed_size))
   if word2vec == []:
     return E
-  for i in range(vocab_size):
-    if i >= n_special_tokens and i2w[i] in word2vec.vocab:
-      E[i:i+1,:] = word2vec[i2w[i]][:embed_size].T
-  return E
+  else:
+    for i in range(vocab_size):
+      if i >= n_special_tokens and i2w[i] in word2vec.vocab:
+        E[i:i+1,:] = word2vec[i2w[i]][:embed_size].T
+    return E

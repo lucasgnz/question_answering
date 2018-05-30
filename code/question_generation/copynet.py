@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+
 import collections
 
 import tensorflow as tf
@@ -67,26 +70,70 @@ class CopyNetWrapper(tf.nn.rnn_cell.RNNCell):
 
         outputs, cell_state = self._cell(inputs, cell_state, scope)
         generate_score = self._projection(outputs)
+        prob_g = generate_score
+
 
         copy_score = tf.einsum("ijk,km->ijm", self._encoder_states, self._copy_weight)
         copy_score = tf.nn.tanh(copy_score)
-
         copy_score = tf.einsum("ijm,im->ij", copy_score, outputs)
-        encoder_input_mask = tf.one_hot(self._encoder_input_ids, self._vocab_size)
-        expanded_copy_score = tf.einsum("ijn,ij->ij", encoder_input_mask, copy_score)
+        prob_c = copy_score
 
-        prob_g = generate_score
-        prob_c = expanded_copy_score
-#        mixed_score = tf.concat([generate_score, expanded_copy_score], 1)
-#        probs = tf.nn.softmax(mixed_score)
-#        prob_g = probs[:, :self._gen_vocab_size]
-#        prob_c = probs[:, self._gen_vocab_size:]
+        
+        """
+        encoder_input_mask = tf.one_hot(self._encoder_input_ids, self._vocab_size)
+        #expanded_copy_score = tf.einsum("ijn,ij->ij", encoder_input_mask, copy_score)
 
         prob_c_one_hot = tf.einsum("ijn,ij->in", encoder_input_mask, prob_c)
+        """
+
+
+
+        #Using sparse tensor
+
+        batch_size, time_steps = tf.unstack(tf.shape(self._encoder_input_ids))
+
+        inputs_flat = tf.reshape(self._encoder_input_ids, [-1])
+        copy_score_flat = tf.reshape(copy_score, [-1])
+
+        rr = tf.range(tf.cast(batch_size * time_steps, tf.int64), dtype=tf.int64)
+        indices = tf.stack([rr, tf.cast(inputs_flat, tf.int64)], axis=1)
+        shape = tf.cast([batch_size * time_steps, self._vocab_size], tf.int64)
+        expanded_copy_score_sparse_flat = tf.SparseTensor(indices, copy_score_flat, shape)
+
+        expanded_copy_score_sparse = tf.sparse_reshape(expanded_copy_score_sparse_flat,
+                                                       [batch_size, time_steps, self._vocab_size])
+        copy_score_sparse = tf.sparse_reduce_sum_sparse(expanded_copy_score_sparse, axis=1)
+        prob_c_one_hot2 = tf.sparse_to_dense(copy_score_sparse.indices, copy_score_sparse.dense_shape,
+                                             copy_score_sparse.values)
+
+
+        """expanded_copy_score_flat = tf.sparse_to_dense(expanded_copy_score_sparse_flat.indices,expanded_copy_score_sparse_flat.dense_shape,expanded_copy_score_sparse_flat.values )
+        expanded_copy_score = tf.reshape(expanded_copy_score_flat, [batch_size, time_steps, self._vocab_size])
+        prob_c_one_hot3 = tf.reduce_sum(expanded_copy_score, axis=1)"""
+
+        #prob_c_one_hot = tf.Print(prob_c_one_hot, [tf.reduce_max(tf.abs(tf.add(prob_c_one_hot3,-prob_c_one_hot2)))])
+
+
         prob_g_total = tf.pad(prob_g, [[0, 0], [0, self._vocab_size - self._gen_vocab_size]])
-        outputs = prob_c_one_hot + prob_g_total
+        outputs =  prob_g_total + prob_c_one_hot2
+
+        """
+        Bugs tres bizzares:
+        prob_c_one_hot est toujours egal a prob_c_one_hot3
+        mais preplexite explose direct si je mets prob_c_one_hot3 à la place de prob_c_one_hot
+        
+        https://stackoverflow.com/questions/45348902/why-is-no-gradient-available-when-using-sparse-tensors-in-tensorflow:
+        It turns out the sparse_to_dense operation (around which sparse_tensor_to_dense is a convenience wrapper) does not have a gradient in TensorFlow
+        
+        sparse_to_dense => scatter_nd ?
+        
+        prob_c_one_hot2 et prob_c_one_hot3 sont différents à 10-6 près environ... mais surement normal(correspond à float32 floating precision)
+        """
+        #pr = tf.reduce_min(tf.reshape(tf.add(prob_c_one_hot2,-prob_c_one_hot),[-1]))
+        #outputs = tf.Print(outputs,[pr])
+
         last_ids = tf.argmax(outputs, axis=-1, output_type=tf.int32)
-        #prob_c.set_shape([None, self._encoder_state_size])
+        last_ids.set_shape([None])
         state = CopyNetWrapperState(cell_state=cell_state, last_ids=last_ids, prob_c=prob_c)
         return outputs, state
 

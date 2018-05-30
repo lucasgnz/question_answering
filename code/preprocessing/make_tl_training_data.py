@@ -14,7 +14,7 @@ import gensim
 
 """
 PAD : 0
-S : 1
+EOS : 1
 UNK : 2
 
 Output TSV: (id, tokenized context id seq, answer start, answer end, question) + voc.npy (+ embedding_matrix.npy)
@@ -29,30 +29,22 @@ def intseq(seq, lookup):
     Replaces with unknown if word not in lookup
     Returns [list of indices]
     """
-    indices = [1]
+    indices = []
     for word in seq:
         if word in lookup:
             indices.append(lookup[word])
         else:
             indices.append(2)
-    indices.append(1)
+    indices.append(0)
     return indices
 
-
-
-vocab_size = 90000
-
-total = 0
-for E in squad['data']:
-    for P in E['paragraphs']:
-        for QA in P['qas']:
-            for A in QA['answers']:
-                total += 1
+LIMIT = len(squad['data'])
+LIMIT = 20
 
 #Création du dictionnaire
 print("Creating vocabulary from SQuAD")
 tokenized_sentences = []
-for E in squad['data']:
+for E in squad['data'][:LIMIT]:
     for P in E['paragraphs']:
         for QA in P['qas']:
             for A in QA['answers']:
@@ -66,21 +58,21 @@ for E in squad['data']:
 freq_dist = nltk.FreqDist(itertools.chain(*(tokenized_sentences)))
 print len(freq_dist.keys()), "different words"
 # get vocabulary of 'vocab_size' most used words
-vocab = freq_dist.most_common(vocab_size)
+vocab = freq_dist.most_common(len(freq_dist.keys()))
 # index2word
-index2word = ['_'] + ['<S>'] + ['<UNK>'] + [x[0] for x in vocab]
+index2word = ['_'] + ['<BOS>'] + ['<UNK>'] + [x[0] for x in vocab]
 
 
-np.save("../../data/voc.npy",index2word)
+np.save("../../data/voc2.npy",index2word)
 
 # word2index
 word2index = dict([(w, i) for i, w in enumerate(index2word)])
 
 
 c = 0
-with open('../../data/tsv/squad_tl.tsv', 'w') as output:
+with open('../../data/tsv/squad_tl2.tsv', 'w') as output:
     writer = csv.writer(output, delimiter='\t')
-    for E in squad['data']:
+    for E in squad['data'][:LIMIT]:
         for P in E['paragraphs']:
             for QA in P['qas']:
                 for A in QA['answers']:
